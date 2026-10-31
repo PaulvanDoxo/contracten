@@ -146,6 +146,21 @@ h1{margin:0;font:700 clamp(32px,6vw,46px)/1.02 var(--f-display);letter-spacing:-
 .empty h2{margin:0;font:700 26px/1.15 var(--f-display);letter-spacing:-.015em}
 .empty p{margin:0;max-width:54ch;color:var(--muted)}
 .empty .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.head-actions{display:flex;flex-wrap:wrap;gap:8px}
+a.btn,label.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.btn.armed{border-color:var(--late);color:var(--late)}
+.zoek{width:min(100%,240px);min-height:36px;padding:8px 11px;font:400 14px/1.3 var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.zoek:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.extras{align-items:center}
+.opts{display:flex;flex-direction:column}
+.opt{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--line)}
+.opt:first-child{border-top:0}
+.opt>div{min-width:0;flex:1 1 220px}
+.opt strong{font:600 15px/1.3 var(--f-body)}
+.opt p{margin:4px 0 0}
+.lead{margin:0 0 6px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.vh:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
 
 @media (max-width:679px){
   .head{display:none}
@@ -198,7 +213,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
       <p class="kicker" id="stand">Stand van vandaag</p>
       <h1>Aflopende contracten</h1>
     </div>
-    <button type="button" class="btn primary" data-act="nieuw">Contract toevoegen</button>
+    <div class="head-actions">
+      <button type="button" class="btn" data-act="data">Back-up en import</button>
+      <button type="button" class="btn primary" data-act="nieuw">Contract toevoegen</button>
+    </div>
   </header>
 
   <p class="banner" id="lokaal-note" hidden>Je bent hier niet ingelogd, dus de contracten blijven alleen bewaard in deze browser.</p>
@@ -226,7 +244,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
       <h2 id="strip-h">Opzegmomenten, komende 12 maanden</h2>
       <div class="legend">
         <span><i class="sq t-late"></i>Binnen 2 weken of verstreken</span>
-        <span><i class="sq t-soon"></i>Binnen 2 maanden</span>
+        <span><i class="sq t-soon"></i>Binnen herinneringstermijn</span>
         <span><i class="sq t-ok"></i>Later</span>
       </div>
     </div>
@@ -271,6 +289,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
           <input type="number" id="f-bedrag" min="0" step="0.01" inputmode="decimal" placeholder="0,00">
           <p class="help">Betaal je per jaar? Deel het bedrag door 12.</p>
         </div>
+        <div class="fld">
+          <label for="f-herinnering">Herinnering (dagen vooraf)</label>
+          <input type="number" id="f-herinnering" min="7" max="365" step="1" inputmode="numeric">
+          <p class="help">Vanaf dan wordt het contract oranje.</p>
+        </div>
         <div class="fld full check">
           <input type="checkbox" id="f-verlengt">
           <div>
@@ -298,6 +321,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
   </div>
 </div>
 
+<div class="backdrop" id="data-backdrop" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="data-titel" id="data-sheet">
+    <h2 id="data-titel">Back-up en import</h2>
+    <div id="data-body"></div>
+    <div class="bar"><button type="button" class="btn" data-act="data-sluit">Sluiten</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
@@ -313,6 +344,7 @@ var MS=86400000;
 
 var contracts=[], loaded=false, mode='laden', filter='alle';
 var editing=null, col=null, dl=null, lastFocus=null, delArmed=false, delTimer=null, toastTimer=null;
+var zoek='', pending=null, dataMelding='', impArmed=false, impTimer=null;
 
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});}
@@ -358,7 +390,7 @@ function bereken(c,t){
   if(dEind<0){tone='done';text='Afgelopen';}
   else if(dActie<0){tone='late';text=(c.verlengt?'Termijn verstreken':'Einde nadert')+' · eindigt '+relatief(dEind);}
   else if(dActie<=14){tone='late';text='Nu actie · '+relatief(dActie);}
-  else if(dActie<=60){tone='soon';text='Binnenkort · '+relatief(dActie);}
+  else if(dActie<=(+c.herinnering||60)){tone='soon';text='Binnenkort · '+relatief(dActie);}
   else{tone='ok';text='Op tijd · '+relatief(dActie);}
   return {eind:eind,actie:actie,dEind:dEind,dActie:dActie,tone:tone,text:text};
 }
@@ -467,6 +499,9 @@ function rowHTML(x){
   if(c.voorbeeld)meta+='<span class="tag">Voorbeeld</span>';
   var acties='<button type="button" class="btn ghost sm" data-act="edit" data-id="'+esc(c.id)+'">Bewerk</button>';
   if(s.tone==='done'&&c.verlengt)acties='<button type="button" class="btn ghost sm" data-act="verleng" data-id="'+esc(c.id)+'">Verleng 1 jaar</button>'+acties;
+  var vl=vergelijkUrl(c.categorie);
+  if(vl)acties+='<a class="btn ghost sm" href="'+vl+'" target="_blank" rel="noopener">Vergelijk</a>';
+  if(s.tone!=='done'&&s.dActie>=0)acties+='<a class="btn ghost sm" href="'+esc(agendaUrl(c,s))+'" target="_blank" rel="noopener">Agenda</a>';
   return '<li class="row'+(s.tone==='done'?' is-done':'')+'">'+
     '<div class="cell info"><h3>'+esc(c.naam)+'</h3><p class="meta">'+meta+'</p>'+(c.notitie?'<p class="note">'+esc(c.notitie)+'</p>':'')+'</div>'+
     '<div class="cell opzeg"><span class="cl">Opzeggen vóór</span><span class="date">'+fmtDate(s.actie)+'</span><span class="pill '+s.tone+'">'+esc(s.text)+'</span></div>'+
@@ -484,7 +519,8 @@ function renderLijst(actief,klaar){
     el.innerHTML='<div class="panel"><div class="empty"><h2>Nog geen contracten</h2>'+
       '<p>Voeg je energiecontract, internet, tv en verzekeringen toe. Per contract zie je dan wanneer je moet opzeggen of overstappen.</p>'+
       '<div class="btns"><button type="button" class="btn primary" data-act="nieuw">Eerste contract toevoegen</button>'+
-      '<button type="button" class="btn" data-act="voorbeeld">Probeer met voorbeelden</button></div></div></div>';
+      '<button type="button" class="btn" data-act="voorbeeld">Probeer met voorbeelden</button>'+
+      '<button type="button" class="btn" data-act="data">Importeer een bestand</button></div></div></div>';
     return;
   }
   var cats=[];
@@ -496,17 +532,21 @@ function renderLijst(actief,klaar){
     var n=alle.filter(function(x){return (x.c.categorie||'Overig')===k;}).length;
     chips+='<button type="button" class="chip" data-act="filter" data-cat="'+esc(k)+'" aria-pressed="'+(filter===k)+'">'+esc(k)+' <span class="n">'+n+'</span></button>';
   });
-  function pas(x){return filter==='alle'||(x.c.categorie||'Overig')===filter;}
+  var q=zoek.trim().toLowerCase();
+  function pas(x){
+    if(filter!=='alle'&&(x.c.categorie||'Overig')!==filter)return false;
+    return !q||[x.c.naam,x.c.nummer,x.c.notitie,x.c.categorie].join(' ').toLowerCase().indexOf(q)>=0;
+  }
   var a=actief.filter(pas),k=klaar.filter(pas);
   var heeftVoorbeeld=contracts.some(function(c){return c&&c.voorbeeld;});
   var extras='';
-  if(dl)extras+='<button type="button" class="linkbtn" data-act="csv">Exporteer als CSV</button>';
+  extras+='<input type="search" id="zoek" class="zoek" placeholder="Zoek op naam of nummer" aria-label="Zoeken in contracten" value="'+esc(zoek)+'">';
   if(heeftVoorbeeld)extras+='<button type="button" class="linkbtn" data-act="wis-voorbeeld">Voorbeelden verwijderen</button>';
 
   var h='<div class="tools"><h2>Contracten</h2><div class="extras">'+extras+'</div></div>'+
         '<div class="chips" role="group" aria-label="Filter op soort">'+chips+'</div>';
   if(a.length)h+='<div class="panel">'+koppen()+'<ul class="list">'+a.map(rowHTML).join('')+'</ul></div>';
-  else h+='<div class="panel"><div class="empty"><p>Geen lopende contracten in deze soort.</p></div></div>';
+  else h+='<div class="panel"><div class="empty"><p>Geen lopende contracten gevonden.</p></div></div>';
   if(k.length)h+='<div class="tools"><h2>Afgelopen</h2></div><div class="panel"><ul class="list">'+k.map(rowHTML).join('')+'</ul></div>';
   el.innerHTML=h;
 }
@@ -532,6 +572,7 @@ function openForm(c){
   $('f-opz-n').value=c?(+c.opzegAantal||0):1;
   $('f-opz-u').value=c?(c.opzegEenheid||'maanden'):'maanden';
   $('f-bedrag').value=c&&c.bedrag?c.bedrag:'';
+  $('f-herinnering').value=c?(c.herinnering||60):60;
   $('f-verlengt').checked=c?!!c.verlengt:true;
   $('f-nummer').value=c?(c.nummer||''):'';
   $('f-notitie').value=c?(c.notitie||''):'';
@@ -557,14 +598,16 @@ async function opslaan(ev){
   var eind=$('f-eind').value;
   var n=parseInt($('f-opz-n').value||'0',10);
   var bedrag=parseFloat($('f-bedrag').value||'0');
+  var herin=parseInt($('f-herinnering').value||'60',10);
   if(!naam){fout('Vul de naam van het contract in.');$('f-naam').focus();return;}
   if(!validDate(eind)){fout('Kies de einddatum van het contract.');$('f-eind').focus();return;}
   if(isNaN(n)||n<0||n>99){fout('De opzegtermijn moet tussen 0 en 99 liggen.');$('f-opz-n').focus();return;}
   if(isNaN(bedrag)||bedrag<0){fout('Vul een bedrag van 0 of hoger in.');$('f-bedrag').focus();return;}
+  if(isNaN(herin)||herin<7||herin>365){fout('De herinnering moet tussen 7 en 365 dagen liggen.');$('f-herinnering').focus();return;}
   var body={
     naam:naam,categorie:$('f-cat').value,eind:eind,
     opzegAantal:n,opzegEenheid:$('f-opz-u').value,
-    bedrag:Math.round(bedrag*100)/100,verlengt:$('f-verlengt').checked,
+    bedrag:Math.round(bedrag*100)/100,verlengt:$('f-verlengt').checked,herinnering:herin,
     nummer:$('f-nummer').value.trim(),notitie:$('f-notitie').value.trim()
   };
   $('btn-opslaan').disabled=true;
@@ -612,13 +655,176 @@ async function verlengEenJaar(id){
     toast('Einddatum verschoven naar '+fmtDate(parse(b.eind))+'.');
   }catch(e){toast(foutTekst(e));}
 }
+/* links */
+function vergelijkUrl(cat){
+  if(cat==='Energie')return 'https://www.gaslicht.com';
+  if(cat==='Verzekering')return 'https://www.independer.nl';
+  if(cat==='Internet'||cat==='TV'||cat==='Mobiel')return 'https://www.overstappen.nl';
+  return '';
+}
+function agendaUrl(c,s){
+  var d=s.actie;
+  var vroeg=new Date(d.getFullYear(),d.getMonth(),d.getDate()-7);
+  var start=diffDays(vroeg,today())>=0?vroeg:d;
+  var eindDag=new Date(start.getFullYear(),start.getMonth(),start.getDate()+1);
+  function ymd(x){return x.getFullYear()+pad(x.getMonth()+1)+pad(x.getDate());}
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent('Opzeggen vóór '+fmtDate(d)+': '+c.naam)+
+    '&dates='+ymd(start)+'/'+ymd(eindDag)+
+    '&details='+encodeURIComponent('Einddatum contract: '+fmtDate(s.eind)+'. '+termijnTekst(c)+'.'+(c.nummer?' Contractnummer: '+c.nummer+'.':''));
+}
+
+/* bestanden bewaren */
+async function bewaarBestand(naam,data,mime){
+  if(dl){
+    try{await dl.save({filename:naam,data:data});toast('Bestand bewaard.');}
+    catch(e){if(!e||e.code!=='declined')toast('Bewaren lukte niet in deze weergave.');}
+    return;
+  }
+  try{
+    var url=URL.createObjectURL(new Blob([data],{type:mime}));
+    var a=document.createElement('a');a.href=url;a.download=naam;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},4000);
+    toast('Bestand gedownload.');
+  }catch(e){toast('Bewaren lukte niet in deze weergave.');}
+}
+function exportJson(){
+  var t=today();
+  var data={app:'aflopende-contracten',versie:1,datum:iso(t),contracten:contracts.filter(Boolean).map(function(c){return Object.assign({},c);})};
+  bewaarBestand('contracten-'+iso(t)+'.json',JSON.stringify(data,null,2),'application/json');
+}
+
+/* import */
+var CAT_MAP={'gas & licht':'Energie','internet & tv':'Internet','mobiel':'Mobiel','zorgverzekering':'Verzekering','schadeverzekering':'Verzekering'};
+function txt(v,max){return typeof v==='string'?v.trim().slice(0,max):(typeof v==='number'?String(v).slice(0,max):'');}
+function getal(v,min,max,std){var n=parseFloat(v);if(isNaN(n))return std;return Math.min(max,Math.max(min,n));}
+function geldigId(id){return typeof id==='string'&&/^[A-Za-z0-9_.~:@+-]{1,100}$/.test(id)&&id!=='.'&&id!=='..';}
+function normaliseer(r){
+  if(!r||typeof r!=='object'||Array.isArray(r))return null;
+  var vreemd=('provider' in r)||('endDate' in r);
+  var eind=txt(vreemd?r.endDate:r.eind,10);
+  if(!validDate(eind)||iso(parse(eind))!==eind)return null;
+  var naam,cat;
+  if(vreemd){
+    var prov=txt(r.provider,80),titel=txt(r.title,80);
+    naam=prov+(prov&&titel?' - ':'')+titel;
+    cat=CAT_MAP[txt(r.type,40).toLowerCase()]||'Overig';
+  }else{
+    naam=txt(r.naam,120);
+    cat=txt(r.categorie,40)||'Overig';
+  }
+  var id=geldigId(r.id)?r.id:null;
+  return {
+    id:id,
+    naam:naam||'Naamloos contract',
+    categorie:cat,
+    eind:eind,
+    opzegAantal:Math.round(getal(vreemd?r.noticePeriodDays:r.opzegAantal,0,99,vreemd?30:1)),
+    opzegEenheid:(!vreemd&&['dagen','weken','maanden'].indexOf(r.opzegEenheid)>=0)?r.opzegEenheid:(vreemd?'dagen':'maanden'),
+    bedrag:Math.round(getal(vreemd?r.monthlyCost:r.bedrag,0,100000,0)*100)/100,
+    verlengt:vreemd?true:r.verlengt!==false,
+    herinnering:Math.round(getal(vreemd?r.reminderDays:r.herinnering,7,365,60)),
+    nummer:vreemd?'':txt(r.nummer,60),
+    notitie:txt(vreemd?r.notes:r.notitie,600),
+    voorbeeld:!!r.voorbeeld||(vreemd&&/^demo-/.test(id||''))
+  };
+}
+function optie(titel,uitleg,knop){
+  return '<div class="opt"><div><strong>'+esc(titel)+'</strong><p class="help">'+esc(uitleg)+'</p></div>'+knop+'</div>';
+}
+function renderData(stap){
+  var el=$('data-body'),h='';
+  var melding=dataMelding?'<p class="err" role="alert">'+esc(dataMelding)+'</p>':'';
+  if(stap==='preview'&&pending){
+    var n=pending.lijst.length;
+    h=melding+'<p class="lead">'+n+(n===1?' contract':' contracten')+' gevonden in het bestand.'+
+      (pending.overgeslagen?' '+pending.overgeslagen+' overgeslagen, want er staat geen geldige einddatum bij.':'')+'</p>';
+    if(n){
+      h+='<div class="opts">'+
+        optie('Toevoegen','Je '+contracts.length+(contracts.length===1?' bestaand contract blijft':' bestaande contracten blijven')+' staan. Contracten met hetzelfde id worden bijgewerkt.','<button type="button" class="btn primary" data-act="imp-merge">Toevoegen</button>')+
+        optie('Alles vervangen','Je huidige contracten worden verwijderd en vervangen door die uit het bestand.','<button type="button" class="btn" data-act="imp-replace">Alles vervangen</button>')+
+        '</div>';
+    }
+    h+='<button type="button" class="linkbtn" data-act="imp-terug">Ander bestand kiezen</button>';
+  }else{
+    h=melding+'<div class="opts">'+
+      optie('Back-up als JSON','Alle contracten in één bestand. Met dit bestand zet je ze later terug, ook op een ander apparaat.','<button type="button" class="btn" data-act="exp-json">Exporteer JSON</button>')+
+      optie('Lijst als CSV','Voor Excel of Numbers. Dit bestand kun je niet weer importeren.','<button type="button" class="btn" data-act="csv">Exporteer CSV</button>')+
+      optie('Importeer een bestand','Kies een JSON-bestand uit deze app of uit OverstapManager.','<input type="file" id="imp-file" class="vh" accept=".json,application/json"><label for="imp-file" class="btn">Kies bestand</label>')+
+      '</div>';
+  }
+  el.innerHTML=h;
+  if(stap==='preview'){var f=el.querySelector('button');if(f)f.focus();}
+}
+function leesImport(bestand){
+  if(!bestand)return;
+  dataMelding='';
+  if(bestand.size>2*1024*1024){dataMelding='Dit bestand is te groot om te importeren.';renderData('start');return;}
+  var fr=new FileReader();
+  fr.onload=function(){
+    var data;
+    try{data=JSON.parse(fr.result);}catch(e){dataMelding='Dit is geen geldig JSON-bestand.';renderData('start');return;}
+    var bron=Array.isArray(data)?data:(data&&Array.isArray(data.contracten)?data.contracten:null);
+    if(!bron){dataMelding='In dit bestand staan geen contracten die ik herken.';renderData('start');return;}
+    var goed=[],fout=Math.max(0,bron.length-500);
+    bron.slice(0,500).forEach(function(r){var c=normaliseer(r);if(c)goed.push(c);else fout++;});
+    pending={lijst:goed,overgeslagen:fout};
+    renderData('preview');
+  };
+  fr.onerror=function(){dataMelding='Het bestand kon niet worden gelezen.';renderData('start');};
+  fr.readAsText(bestand);
+}
+async function voerImportUit(vervang){
+  if(!pending)return;
+  var lijst=pending.lijst;
+  try{
+    if(mode==='db'){
+      if(vervang){
+        var oud=contracts.map(function(c){return c.id;});
+        for(var i=0;i<oud.length;i++)await col.doc(oud[i]).delete();
+      }
+      for(var j=0;j<lijst.length;j++){
+        var c=lijst[j],b=zonderId(c);
+        var ref=c.id?col.doc(c.id):col.doc();
+        await ref.set(b);
+      }
+    }else{
+      var basis=vervang?[]:contracts.slice();
+      lijst.forEach(function(c){
+        var id=c.id||nieuwId();
+        var rec=Object.assign({},c,{id:id});
+        var k=basis.findIndex(function(x){return x.id===id;});
+        if(k>=0)basis[k]=rec;else basis.push(rec);
+      });
+      contracts=basis;persistLocal();render();
+    }
+    var n=lijst.length;
+    sluitData();
+    toast(n+(n===1?' contract geïmporteerd.':' contracten geïmporteerd.'));
+  }catch(e){
+    dataMelding=foutTekst(e);renderData('preview');
+  }
+}
+function openData(){
+  lastFocus=document.activeElement;
+  pending=null;dataMelding='';impArmed=false;
+  renderData('start');
+  $('data-backdrop').hidden=false;
+  document.body.classList.add('lock');
+  setTimeout(function(){var b=$('data-body').querySelector('button');if(b)b.focus();},0);
+}
+function sluitData(){
+  $('data-backdrop').hidden=true;
+  document.body.classList.remove('lock');
+  pending=null;impArmed=false;clearTimeout(impTimer);
+  if(lastFocus&&lastFocus.focus&&document.contains(lastFocus))lastFocus.focus();
+}
+
 function celCsv(v){
   var s=String(v==null?'':v);
   if(/^[=+\-@\t\r]/.test(s))s="'"+s;
   return /[;"\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 }
 async function exporteer(){
-  if(!dl)return;
   var t=today();
   var rijen=[['Contract','Soort','Einddatum','Opzegtermijn','Opzeggen vóór','Kosten per maand','Loopt vanzelf door','Contractnummer','Notities']];
   contracts.filter(function(c){return c&&validDate(c.eind);}).sort(function(a,b){return a.eind<b.eind?-1:1;}).forEach(function(c){
@@ -626,8 +832,7 @@ async function exporteer(){
     rijen.push([c.naam,c.categorie,c.eind,termijnTekst(c),iso(s.actie),(+c.bedrag||0).toFixed(2).replace('.',','),c.verlengt?'ja':'nee',c.nummer,c.notitie]);
   });
   var tekst='﻿'+rijen.map(function(r){return r.map(celCsv).join(';');}).join('\r\n');
-  try{await dl.save({filename:'contracten-'+iso(t)+'.csv',data:tekst});toast('Bestand bewaard.');}
-  catch(e){if(!e||e.code!=='declined')toast('Exporteren lukte niet in deze weergave.');}
+  await bewaarBestand('contracten-'+iso(t)+'.csv',tekst,'text/csv;charset=utf-8');
 }
 
 document.addEventListener('click',function(ev){
@@ -640,6 +845,18 @@ document.addEventListener('click',function(ev){
     else if(act==='voorbeeld')voegVoorbeeldenToe();
     else if(act==='wis-voorbeeld')wisVoorbeelden();
     else if(act==='csv')exporteer();
+    else if(act==='exp-json')exportJson();
+    else if(act==='data')openData();
+    else if(act==='data-sluit')sluitData();
+    else if(act==='imp-merge')voerImportUit(false);
+    else if(act==='imp-terug'){pending=null;dataMelding='';renderData('start');}
+    else if(act==='imp-replace'){
+      if(!impArmed){
+        impArmed=true;btn.textContent='Zeker weten? Vervang alles';btn.classList.add('armed');
+        clearTimeout(impTimer);
+        impTimer=setTimeout(function(){impArmed=false;if(btn.isConnected){btn.textContent='Alles vervangen';btn.classList.remove('armed');}},4000);
+      }else{impArmed=false;voerImportUit(true);}
+    }
     else if(act==='sluit')sluitForm();
     else if(act==='filter'){
       filter=btn.getAttribute('data-cat');render();
@@ -658,18 +875,31 @@ document.addEventListener('click',function(ev){
     return;
   }
   if(ev.target===$('backdrop'))sluitForm();
+  if(ev.target===$('data-backdrop'))sluitData();
 });
 $('form').addEventListener('submit',opslaan);
 document.addEventListener('keydown',function(ev){
-  if($('backdrop').hidden)return;
-  if(ev.key==='Escape'){sluitForm();return;}
+  var dlg=!$('backdrop').hidden?$('backdrop'):(!$('data-backdrop').hidden?$('data-backdrop'):null);
+  if(!dlg)return;
+  if(ev.key==='Escape'){if(dlg.id==='backdrop')sluitForm();else sluitData();return;}
   if(ev.key==='Tab'){
-    var els=Array.prototype.filter.call($('sheet').querySelectorAll('input,select,textarea,button'),function(e){return !e.disabled&&!e.hidden&&e.offsetParent!==null;});
+    var els=Array.prototype.filter.call(dlg.querySelectorAll('input,select,textarea,button'),function(e){return !e.disabled&&!e.hidden&&e.offsetParent!==null;});
     if(!els.length)return;
     var first=els[0],last=els[els.length-1];
     if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}
     else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}
   }
+});
+document.addEventListener('input',function(ev){
+  if(ev.target&&ev.target.id==='zoek'){
+    var pos=ev.target.selectionStart;
+    zoek=ev.target.value;render();
+    var z=$('zoek');
+    if(z){z.focus();try{z.setSelectionRange(pos,pos);}catch(e){}}
+  }
+});
+document.addEventListener('change',function(ev){
+  if(ev.target&&ev.target.id==='imp-file')leesImport(ev.target.files&&ev.target.files[0]);
 });
 document.addEventListener('visibilitychange',function(){if(!document.hidden)render();});
 
