@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aflopende contracten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Indeling: één werkkolom met samenvatting, een strook van twaalf maanden met opzegmomenten, en daaronder de lijst gesorteerd op opzegdatum. */
+:root{
+  --bg:#EEF2F5;
+  --surface:#FFFFFF;
+  --ink:#13202C;
+  --muted:#586878;
+  --line:#D6DEE5;
+  --accent:#1D4ED8;
+  --accent-ink:#FFFFFF;
+  --late:#B42323; --late-bg:#FBE4E4;
+  --soon:#8A5300; --soon-bg:#FCEDD0;
+  --ok:#17703F;   --ok-bg:#DDF1E5;
+  --done:#5E6C79; --done-bg:#E4EAF0;
+  --scrim:rgba(10,18,26,.55);
+  --f-display:"Familjen Grotesk","Segoe UI",system-ui,sans-serif;
+  --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E151D; --surface:#151F2A; --ink:#E7EDF3; --muted:#91A1B1; --line:#263342;
+    --accent:#7C9CFF; --accent-ink:#0E151D;
+    --late:#FF8A8A; --late-bg:#3A1B1E;
+    --soon:#F2B45A; --soon-bg:#382A12;
+    --ok:#6FD39A;   --ok-bg:#14301F;
+    --done:#98A8B7; --done-bg:#1B2733;
+    --scrim:rgba(0,0,0,.65);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E151D; --surface:#151F2A; --ink:#E7EDF3; --muted:#91A1B1; --line:#263342;
+  --accent:#7C9CFF; --accent-ink:#0E151D;
+  --late:#FF8A8A; --late-bg:#3A1B1E;
+  --soon:#F2B45A; --soon-bg:#382A12;
+  --ok:#6FD39A;   --ok-bg:#14301F;
+  --done:#98A8B7; --done-bg:#1B2733;
+  --scrim:rgba(0,0,0,.65);
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--f-body); font-size:15px; line-height:1.5;
+  padding-block:32px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+body.lock{overflow:hidden}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+.mono{font-family:var(--f-mono)}
+
+/* kop */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px 24px;flex-wrap:wrap}
+.kicker{margin:0 0 8px;font:500 12px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{margin:0;font:700 clamp(32px,6vw,46px)/1.02 var(--f-display);letter-spacing:-.025em;text-wrap:balance}
+
+.btn{font:600 14px/1 var(--f-body);padding:11px 16px;min-height:40px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.6;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:8px 12px;min-height:34px;font-size:13px}
+.btn.danger{background:transparent;border-color:transparent;color:var(--late)}
+.btn.danger.armed{border-color:var(--late)}
+.linkbtn{background:none;border:0;padding:6px 2px;font:500 13px/1.2 var(--f-body);color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.linkbtn:hover{color:var(--ink)}
+
+.banner{margin:0;padding:10px 14px;border-radius:8px;background:var(--done-bg);color:var(--muted);font-size:14px}
+
+/* samenvatting */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px 28px}
+.fact{border-top:2px solid var(--ink);padding-top:12px;min-width:0}
+.fact .k{font:500 12px/1.2 var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.fact .v{margin:8px 0 4px;font:700 34px/1.1 var(--f-display);letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.fact .s{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+
+/* twaalf maanden */
+.strip{padding:18px 18px 14px}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin:0 0 14px}
+.sec-h h2{margin:0;font:600 18px/1.2 var(--f-display);letter-spacing:-.01em}
+.legend{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sq{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c)}
+.t-late{--c:var(--late)} .t-soon{--c:var(--soon)} .t-ok{--c:var(--ok)}
+.months{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
+.m{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.m .stack{height:112px;width:100%;display:flex;flex-direction:column-reverse;align-items:center;gap:3px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.m .stack i{display:block;width:100%;max-width:24px;aspect-ratio:1;border-radius:3px;background:var(--c)}
+.m .stack b{font:500 11px/1 var(--f-mono);color:var(--muted)}
+.m .lab{font:400 11px/1.2 var(--f-mono);color:var(--muted);text-align:center}
+.m .lab em{display:block;font-style:normal;font-size:10px;opacity:.8}
+.m.now .lab{color:var(--ink);font-weight:500}
+.strip .after{margin:10px 0 0;font-size:13px;color:var(--muted)}
+
+/* lijst */
+.tools{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:space-between;align-items:center}
+.tools h2{margin:0;font:600 18px/1.2 var(--f-display);letter-spacing:-.01em}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:7px 11px;font:500 13px/1.2 var(--f-body);cursor:pointer}
+.chip .n{font:400 12px/1 var(--f-mono);color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip[aria-pressed="true"] .n{color:var(--bg);opacity:.75}
+.section{display:flex;flex-direction:column;gap:12px}
+.extras{display:flex;gap:4px 16px;flex-wrap:wrap}
+
+.list{list-style:none;margin:0;padding:0}
+.head,.row{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.9fr) 112px;column-gap:20px;align-items:start}
+.head{padding:10px 18px;border-bottom:1px solid var(--line);font:500 11px/1.2 var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.row{padding:16px 18px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.cell{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.info h3{margin:0;font:600 17px/1.25 var(--f-display);overflow-wrap:anywhere}
+.meta{margin:0;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;color:var(--muted)}
+.meta .mono{font-size:12px}
+.tag{padding:1px 7px;border-radius:4px;background:var(--done-bg);color:var(--muted);font-size:12px;font-weight:500}
+.note{margin:2px 0 0;max-width:60ch;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.date{font:500 15px/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.sub{font-size:13px;color:var(--muted)}
+.cl{display:none;font:500 11px/1.2 var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;font:600 12.5px/1.3 var(--f-body);text-align:left;background:var(--pbg);color:var(--pfg)}
+.pill::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.late{--pbg:var(--late-bg);--pfg:var(--late)}
+.pill.soon{--pbg:var(--soon-bg);--pfg:var(--soon)}
+.pill.ok{--pbg:var(--ok-bg);--pfg:var(--ok)}
+.pill.done{--pbg:var(--done-bg);--pfg:var(--done)}
+.act{flex-direction:column;align-items:stretch;gap:6px}
+.row.is-done .info h3{color:var(--muted)}
+
+.empty{padding:36px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.empty h2{margin:0;font:700 26px/1.15 var(--f-display);letter-spacing:-.015em}
+.empty p{margin:0;max-width:54ch;color:var(--muted)}
+.empty .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+
+@media (max-width:679px){
+  .head{display:none}
+  .row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"info info" "opzeg eind" "bedrag act";row-gap:14px}
+  .info{grid-area:info}.opzeg{grid-area:opzeg}.eind{grid-area:eind}.bedrag{grid-area:bedrag}
+  .act{grid-area:act;flex-direction:row;flex-wrap:wrap;justify-content:flex-end;align-self:end}
+  .cl{display:block}
+}
+
+/* formulier */
+.backdrop{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet{width:100%;max-width:560px;max-height:100%;overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:22px}
+.sheet h2{margin:0 0 16px;font:700 24px/1.15 var(--f-display);letter-spacing:-.015em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px 14px}
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fld.full{grid-column:1/-1}
+.fld label,.fld .lbl{font:600 13px/1.3 var(--f-body)}
+.help{margin:0;font-size:12.5px;color:var(--muted)}
+input[type="text"],input[type="number"],input[type="date"],select,textarea{
+  width:100%;min-width:0;min-height:42px;padding:10px 11px;
+  font:400 15px/1.3 var(--f-body);color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:6px;
+}
+textarea{resize:vertical;min-height:78px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.inline{display:grid;grid-template-columns:92px 1fr;gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start}
+.check input{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent)}
+.check label{font-weight:600}
+.err{margin:0;color:var(--late);font-size:14px;font-weight:500}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:20px}
+.bar .spacer{flex:1}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:60;max-width:calc(100% - 32px);padding:10px 16px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:14px}
+@media (max-width:559px){
+  .backdrop{align-items:flex-end;padding:0}
+  .sheet{border-radius:14px 14px 0 0;border-bottom:0;padding:20px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px))}
+  .grid2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){
+  .btn,.chip,.linkbtn{transition:border-color .15s,filter .15s,color .15s}
+}
+</style>
+
+<style>html{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="kicker" id="stand">Stand van vandaag</p>
+      <h1>Aflopende contracten</h1>
+    </div>
+    <button type="button" class="btn primary" data-act="nieuw">Contract toevoegen</button>
+  </header>
+
+  <p class="banner" id="lokaal-note" hidden>Je bent hier niet ingelogd, dus de contracten blijven alleen bewaard in deze browser.</p>
+
+  <section class="facts" aria-label="Samenvatting">
+    <div class="fact">
+      <div class="k">Nu aandacht nodig</div>
+      <div class="v" id="f1v">–</div>
+      <div class="s" id="f1s">Laden…</div>
+    </div>
+    <div class="fact">
+      <div class="k">Eerstvolgende deadline</div>
+      <div class="v" id="f2v">–</div>
+      <div class="s" id="f2s"></div>
+    </div>
+    <div class="fact">
+      <div class="k">Lopende kosten</div>
+      <div class="v" id="f3v">–</div>
+      <div class="s" id="f3s"></div>
+    </div>
+  </section>
+
+  <section class="panel strip" aria-labelledby="strip-h">
+    <div class="sec-h">
+      <h2 id="strip-h">Opzegmomenten, komende 12 maanden</h2>
+      <div class="legend">
+        <span><i class="sq t-late"></i>Binnen 2 weken of verstreken</span>
+        <span><i class="sq t-soon"></i>Binnen 2 maanden</span>
+        <span><i class="sq t-ok"></i>Later</span>
+      </div>
+    </div>
+    <div class="months" id="months" role="img" aria-label="Aantal opzegmomenten per maand"></div>
+    <p class="after" id="after" hidden></p>
+  </section>
+
+  <div id="lijst" class="section"></div>
+</main>
+
+<div class="backdrop" id="backdrop" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-titel" id="sheet">
+    <h2 id="sheet-titel">Contract toevoegen</h2>
+    <form id="form" novalidate>
+      <div class="grid2">
+        <div class="fld full">
+          <label for="f-naam">Contract</label>
+          <input type="text" id="f-naam" maxlength="120" placeholder="Bijvoorbeeld: stroom en gas" autocomplete="off">
+        </div>
+        <div class="fld">
+          <label for="f-cat">Soort</label>
+          <select id="f-cat"></select>
+        </div>
+        <div class="fld">
+          <label for="f-eind">Einddatum</label>
+          <input type="date" id="f-eind">
+        </div>
+        <div class="fld">
+          <span class="lbl" id="l-opz">Opzegtermijn</span>
+          <div class="inline" role="group" aria-labelledby="l-opz">
+            <input type="number" id="f-opz-n" min="0" max="99" step="1" inputmode="numeric" aria-label="Aantal">
+            <select id="f-opz-u" aria-label="Eenheid">
+              <option value="dagen">dagen</option>
+              <option value="weken">weken</option>
+              <option value="maanden">maanden</option>
+            </select>
+          </div>
+          <p class="help">Staat in je contract of de voorwaarden.</p>
+        </div>
+        <div class="fld">
+          <label for="f-bedrag">Kosten per maand (€)</label>
+          <input type="number" id="f-bedrag" min="0" step="0.01" inputmode="decimal" placeholder="0,00">
+          <p class="help">Betaal je per jaar? Deel het bedrag door 12.</p>
+        </div>
+        <div class="fld full check">
+          <input type="checkbox" id="f-verlengt">
+          <div>
+            <label for="f-verlengt">Loopt na de einddatum vanzelf door</label>
+            <p class="help">Dan moet je op tijd opzeggen, anders loop je weer vast.</p>
+          </div>
+        </div>
+        <div class="fld full">
+          <label for="f-nummer">Contractnummer (optioneel)</label>
+          <input type="text" id="f-nummer" maxlength="60" autocomplete="off">
+        </div>
+        <div class="fld full">
+          <label for="f-notitie">Notities (optioneel)</label>
+          <textarea id="f-notitie" maxlength="600" placeholder="Bijvoorbeeld: opzeggen kan via Mijn omgeving of per brief"></textarea>
+        </div>
+      </div>
+      <p class="err" id="form-fout" role="alert" hidden></p>
+      <div class="bar">
+        <button type="submit" class="btn primary" id="btn-opslaan">Opslaan</button>
+        <button type="button" class="btn" data-act="sluit">Annuleren</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn danger" id="btn-del" data-act="verwijder" hidden>Verwijderen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function(){
+'use strict';
+
+var MAANDEN=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+var KORT=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+var DAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+var CATEGORIEEN=['Energie','Internet','TV','Mobiel','Verzekering','Abonnement','Overig'];
+var LS_KEY='aflopende-contracten-v1';
+var MS=86400000;
+
+var contracts=[], loaded=false, mode='laden', filter='alle';
+var editing=null, col=null, dl=null, lastFocus=null, delArmed=false, delTimer=null, toastTimer=null;
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});}
+function pad(n){return String(n).padStart(2,'0');}
+
+/* datums: alles lokaal, als JJJJ-MM-DD */
+function parse(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]);}
+function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function today(){var n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate());}
+function diffDays(a,b){return Math.round((a-b)/MS);}
+function addMonths(d,n){var r=new Date(d.getFullYear(),d.getMonth()+n,d.getDate());if(r.getDate()!==d.getDate())r.setDate(0);return r;}
+function fmtDate(d){return d.getDate()+' '+KORT[d.getMonth()]+' '+d.getFullYear();}
+function validDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);}
+
+var eur2=new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'});
+var eur0=new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+
+function relatief(d){
+  if(d===0)return 'vandaag';
+  if(d===1)return 'morgen';
+  if(d<=14)return 'over '+d+' dagen';
+  if(d<=60){var w=Math.round(d/7);return 'over '+w+' weken';}
+  var m=Math.round(d/30.4);return 'over '+m+' maanden';
+}
+
+function opzegDatum(c,eind){
+  var n=+c.opzegAantal||0;
+  if(c.opzegEenheid==='maanden')return addMonths(eind,-n);
+  var dagen=c.opzegEenheid==='weken'?n*7:n;
+  return new Date(eind.getFullYear(),eind.getMonth(),eind.getDate()-dagen);
+}
+function termijnTekst(c){
+  var n=+c.opzegAantal||0;
+  if(!n)return 'Geen opzegtermijn';
+  var u={dagen:['dag','dagen'],weken:['week','weken'],maanden:['maand','maanden']}[c.opzegEenheid]||['dag','dagen'];
+  return n+' '+(n===1?u[0]:u[1])+' opzegtermijn';
+}
+
+function bereken(c,t){
+  var eind=parse(c.eind), actie=opzegDatum(c,eind);
+  var dEind=diffDays(eind,t), dActie=diffDays(actie,t);
+  var tone,text;
+  if(dEind<0){tone='done';text='Afgelopen';}
+  else if(dActie<0){tone='late';text=(c.verlengt?'Termijn verstreken':'Einde nadert')+' · eindigt '+relatief(dEind);}
+  else if(dActie<=14){tone='late';text='Nu actie · '+relatief(dActie);}
+  else if(dActie<=60){tone='soon';text='Binnenkort · '+relatief(dActie);}
+  else{tone='ok';text='Op tijd · '+relatief(dActie);}
+  return {eind:eind,actie:actie,dEind:dEind,dActie:dActie,tone:tone,text:text};
+}
+
+/* opslag */
+function nieuwId(){return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function persistLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(contracts));}catch(e){}}
+function laadLocal(){try{var r=JSON.parse(localStorage.getItem(LS_KEY)||'[]');return Array.isArray(r)?r:[];}catch(e){return [];}}
+function gaLokaal(){mode='lokaal';col=null;contracts=laadLocal();loaded=true;}
+
+async function bewaar(body,id){
+  if(mode==='db'){
+    var ref=id?col.doc(id):col.doc();
+    await ref.set(body);
+  }else{
+    if(id){var i=contracts.findIndex(function(x){return x.id===id;});if(i>=0)contracts[i]=Object.assign({},body,{id:id});}
+    else contracts.push(Object.assign({},body,{id:nieuwId()}));
+    persistLocal();render();
+  }
+}
+async function verwijder(id){
+  if(mode==='db'){await col.doc(id).delete();}
+  else{contracts=contracts.filter(function(x){return x.id!==id;});persistLocal();render();}
+}
+function zonderId(c){var b=Object.assign({},c);delete b.id;return b;}
+
+function toast(msg){
+  var el=$('toast');el.textContent=msg;el.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.hidden=true;},3800);
+}
+function foutTekst(e){return 'Dat lukte niet ('+((e&&e.code)||'onbekende fout')+'). Probeer het opnieuw.';}
+
+/* weergave */
+function render(){
+  var t=today();
+  $('stand').textContent='Stand van '+DAGEN[t.getDay()]+' '+t.getDate()+' '+MAANDEN[t.getMonth()]+' '+t.getFullYear();
+  $('lokaal-note').hidden=mode!=='lokaal';
+
+  var items=contracts.filter(function(c){return c&&validDate(c.eind);}).map(function(c){return {c:c,s:bereken(c,t)};});
+  var actief=items.filter(function(x){return x.s.tone!=='done';}).sort(function(a,b){return (a.s.actie-b.s.actie)||String(a.c.naam).localeCompare(String(b.c.naam),'nl');});
+  var klaar=items.filter(function(x){return x.s.tone==='done';}).sort(function(a,b){return b.s.eind-a.s.eind;});
+
+  renderFacts(actief);
+  renderStrip(actief,t);
+  renderLijst(actief,klaar);
+}
+
+function renderFacts(actief){
+  if(!loaded){$('f1v').textContent='–';$('f1s').textContent='Laden…';$('f2v').textContent='–';$('f2s').textContent='';$('f3v').textContent='–';$('f3s').textContent='';return;}
+  var aandacht=actief.filter(function(x){return x.s.tone==='late';});
+  $('f1v').textContent=String(aandacht.length);
+  if(aandacht.length){
+    var namen=aandacht.slice(0,2).map(function(x){return x.c.naam;}).join(', ');
+    $('f1s').textContent=namen+(aandacht.length>2?' en '+(aandacht.length-2)+' andere':'');
+  }else{
+    $('f1s').textContent='Niets dat binnen twee weken afloopt.';
+  }
+  var volgend=actief.filter(function(x){return x.s.dActie>=0;})[0];
+  if(volgend){
+    $('f2v').textContent=volgend.s.actie.getDate()+' '+MAANDEN[volgend.s.actie.getMonth()];
+    $('f2s').textContent=volgend.c.naam+' · '+relatief(volgend.s.dActie);
+  }else{
+    $('f2v').textContent='–';
+    $('f2s').textContent=actief.length?'Alle termijnen zijn al verstreken.':'Nog geen contracten.';
+  }
+  var som=actief.reduce(function(a,x){return a+(+x.c.bedrag||0);},0);
+  $('f3v').textContent=eur0.format(som)+' /mnd';
+  $('f3s').textContent=actief.length?eur0.format(som*12)+' per jaar · '+actief.length+(actief.length===1?' lopend contract':' lopende contracten'):'Geen lopende contracten.';
+}
+
+function renderStrip(actief,t){
+  var buckets=[],i;
+  for(i=0;i<12;i++)buckets.push([]);
+  var later=0;
+  actief.forEach(function(x){
+    var idx=(x.s.actie.getFullYear()-t.getFullYear())*12+x.s.actie.getMonth()-t.getMonth();
+    if(idx<0)idx=0;
+    if(idx>11){later++;return;}
+    buckets[idx].push(x);
+  });
+  var rank={late:0,soon:1,ok:2};
+  var html='',totaal=0;
+  for(i=0;i<12;i++){
+    var d=new Date(t.getFullYear(),t.getMonth()+i,1);
+    var lijst=buckets[i].slice().sort(function(a,b){return rank[a.s.tone]-rank[b.s.tone];});
+    totaal+=lijst.length;
+    var zichtbaar=lijst.length>4?lijst.slice(0,3):lijst;
+    var sq=zichtbaar.map(function(x){return '<i class="t-'+x.s.tone+'" title="'+esc(x.c.naam+' · opzeggen vóór '+fmtDate(x.s.actie))+'"></i>';}).join('');
+    if(lijst.length>4)sq+='<b>+'+(lijst.length-3)+'</b>';
+    var jaar=(i===0||d.getMonth()===0)?'<em>’'+String(d.getFullYear()).slice(2)+'</em>':'';
+    html+='<div class="m'+(i===0?' now':'')+'"><div class="stack" aria-hidden="true">'+sq+'</div><div class="lab">'+KORT[d.getMonth()]+jaar+'</div></div>';
+  }
+  var el=$('months');
+  el.innerHTML=html;
+  el.setAttribute('aria-label',totaal+(totaal===1?' opzegmoment':' opzegmomenten')+' in de komende 12 maanden');
+  var after=$('after');
+  if(later){after.hidden=false;after.textContent='Verder dan 12 maanden: '+later+(later===1?' contract.':' contracten.');}
+  else after.hidden=true;
+}
+
+function rowHTML(x){
+  var c=x.c,s=x.s;
+  var meta='<span>'+esc(c.categorie||'Overig')+'</span>';
+  if(c.nummer)meta+='<span class="mono">'+esc(c.nummer)+'</span>';
+  if(c.verlengt)meta+='<span>Loopt vanzelf door</span>';
+  if(c.voorbeeld)meta+='<span class="tag">Voorbeeld</span>';
+  var acties='<button type="button" class="btn ghost sm" data-act="edit" data-id="'+esc(c.id)+'">Bewerk</button>';
+  if(s.tone==='done'&&c.verlengt)acties='<button type="button" class="btn ghost sm" data-act="verleng" data-id="'+esc(c.id)+'">Verleng 1 jaar</button>'+acties;
+  return '<li class="row'+(s.tone==='done'?' is-done':'')+'">'+
+    '<div class="cell info"><h3>'+esc(c.naam)+'</h3><p class="meta">'+meta+'</p>'+(c.notitie?'<p class="note">'+esc(c.notitie)+'</p>':'')+'</div>'+
+    '<div class="cell opzeg"><span class="cl">Opzeggen vóór</span><span class="date">'+fmtDate(s.actie)+'</span><span class="pill '+s.tone+'">'+esc(s.text)+'</span></div>'+
+    '<div class="cell eind"><span class="cl">Einddatum</span><span class="date">'+fmtDate(s.eind)+'</span><span class="sub">'+esc(termijnTekst(c))+'</span></div>'+
+    '<div class="cell bedrag"><span class="cl">Per maand</span><span class="date">'+((+c.bedrag)?eur2.format(+c.bedrag):'–')+'</span></div>'+
+    '<div class="cell act">'+acties+'</div></li>';
+}
+function koppen(){return '<div class="head" aria-hidden="true"><span>Contract</span><span>Opzeggen vóór</span><span>Einddatum</span><span>Per maand</span><span></span></div>';}
+
+function renderLijst(actief,klaar){
+  var el=$('lijst');
+  if(!loaded){el.innerHTML='<div class="panel"><div class="empty"><p>Contracten laden…</p></div></div>';return;}
+  var alle=actief.concat(klaar);
+  if(!alle.length){
+    el.innerHTML='<div class="panel"><div class="empty"><h2>Nog geen contracten</h2>'+
+      '<p>Voeg je energiecontract, internet, tv en verzekeringen toe. Per contract zie je dan wanneer je moet opzeggen of overstappen.</p>'+
+      '<div class="btns"><button type="button" class="btn primary" data-act="nieuw">Eerste contract toevoegen</button>'+
+      '<button type="button" class="btn" data-act="voorbeeld">Probeer met voorbeelden</button></div></div></div>';
+    return;
+  }
+  var cats=[];
+  alle.forEach(function(x){var k=x.c.categorie||'Overig';if(cats.indexOf(k)<0)cats.push(k);});
+  cats.sort(function(a,b){var ia=CATEGORIEEN.indexOf(a),ib=CATEGORIEEN.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b,'nl');});
+  if(filter!=='alle'&&cats.indexOf(filter)<0)filter='alle';
+  var chips='<button type="button" class="chip" data-act="filter" data-cat="alle" aria-pressed="'+(filter==='alle')+'">Alles <span class="n">'+alle.length+'</span></button>';
+  cats.forEach(function(k){
+    var n=alle.filter(function(x){return (x.c.categorie||'Overig')===k;}).length;
+    chips+='<button type="button" class="chip" data-act="filter" data-cat="'+esc(k)+'" aria-pressed="'+(filter===k)+'">'+esc(k)+' <span class="n">'+n+'</span></button>';
+  });
+  function pas(x){return filter==='alle'||(x.c.categorie||'Overig')===filter;}
+  var a=actief.filter(pas),k=klaar.filter(pas);
+  var heeftVoorbeeld=contracts.some(function(c){return c&&c.voorbeeld;});
+  var extras='';
+  if(dl)extras+='<button type="button" class="linkbtn" data-act="csv">Exporteer als CSV</button>';
+  if(heeftVoorbeeld)extras+='<button type="button" class="linkbtn" data-act="wis-voorbeeld">Voorbeelden verwijderen</button>';
+
+  var h='<div class="tools"><h2>Contracten</h2><div class="extras">'+extras+'</div></div>'+
+        '<div class="chips" role="group" aria-label="Filter op soort">'+chips+'</div>';
+  if(a.length)h+='<div class="panel">'+koppen()+'<ul class="list">'+a.map(rowHTML).join('')+'</ul></div>';
+  else h+='<div class="panel"><div class="empty"><p>Geen lopende contracten in deze soort.</p></div></div>';
+  if(k.length)h+='<div class="tools"><h2>Afgelopen</h2></div><div class="panel"><ul class="list">'+k.map(rowHTML).join('')+'</ul></div>';
+  el.innerHTML=h;
+}
+
+/* formulier */
+function vulSoorten(sel){
+  var lijst=CATEGORIEEN.slice();
+  if(sel&&lijst.indexOf(sel)<0)lijst.push(sel);
+  $('f-cat').innerHTML=lijst.map(function(k){return '<option value="'+esc(k)+'">'+esc(k)+'</option>';}).join('');
+  $('f-cat').value=sel||'Energie';
+}
+function resetDel(){
+  delArmed=false;clearTimeout(delTimer);
+  var b=$('btn-del');b.textContent='Verwijderen';b.classList.remove('armed');
+}
+function openForm(c){
+  editing=c||null;
+  lastFocus=document.activeElement;
+  $('sheet-titel').textContent=c?'Contract bewerken':'Contract toevoegen';
+  vulSoorten(c?c.categorie:'Energie');
+  $('f-naam').value=c?c.naam:'';
+  $('f-eind').value=c?c.eind:'';
+  $('f-opz-n').value=c?(+c.opzegAantal||0):1;
+  $('f-opz-u').value=c?(c.opzegEenheid||'maanden'):'maanden';
+  $('f-bedrag').value=c&&c.bedrag?c.bedrag:'';
+  $('f-verlengt').checked=c?!!c.verlengt:true;
+  $('f-nummer').value=c?(c.nummer||''):'';
+  $('f-notitie').value=c?(c.notitie||''):'';
+  $('form-fout').hidden=true;
+  $('btn-del').hidden=!c;
+  resetDel();
+  $('btn-opslaan').disabled=false;
+  $('backdrop').hidden=false;
+  document.body.classList.add('lock');
+  setTimeout(function(){$('f-naam').focus();},0);
+}
+function sluitForm(){
+  $('backdrop').hidden=true;
+  document.body.classList.remove('lock');
+  editing=null;resetDel();
+  if(lastFocus&&lastFocus.focus&&document.contains(lastFocus))lastFocus.focus();
+}
+function fout(msg){var e=$('form-fout');e.textContent=msg;e.hidden=false;}
+
+async function opslaan(ev){
+  ev.preventDefault();
+  var naam=$('f-naam').value.trim();
+  var eind=$('f-eind').value;
+  var n=parseInt($('f-opz-n').value||'0',10);
+  var bedrag=parseFloat($('f-bedrag').value||'0');
+  if(!naam){fout('Vul de naam van het contract in.');$('f-naam').focus();return;}
+  if(!validDate(eind)){fout('Kies de einddatum van het contract.');$('f-eind').focus();return;}
+  if(isNaN(n)||n<0||n>99){fout('De opzegtermijn moet tussen 0 en 99 liggen.');$('f-opz-n').focus();return;}
+  if(isNaN(bedrag)||bedrag<0){fout('Vul een bedrag van 0 of hoger in.');$('f-bedrag').focus();return;}
+  var body={
+    naam:naam,categorie:$('f-cat').value,eind:eind,
+    opzegAantal:n,opzegEenheid:$('f-opz-u').value,
+    bedrag:Math.round(bedrag*100)/100,verlengt:$('f-verlengt').checked,
+    nummer:$('f-nummer').value.trim(),notitie:$('f-notitie').value.trim()
+  };
+  $('btn-opslaan').disabled=true;
+  try{
+    await bewaar(body,editing?editing.id:null);
+    sluitForm();toast('Opgeslagen.');
+  }catch(e){
+    $('btn-opslaan').disabled=false;fout(foutTekst(e));
+  }
+}
+
+/* acties */
+function voorbeelden(){
+  var t=today();
+  function plus(n){return iso(new Date(t.getFullYear(),t.getMonth(),t.getDate()+n));}
+  return [
+    {naam:'Stroom en gas',categorie:'Energie',eind:plus(52),opzegAantal:1,opzegEenheid:'maanden',bedrag:148,verlengt:true,nummer:'',notitie:'Vast contract, daarna variabel tarief.'},
+    {naam:'Glasvezel internet',categorie:'Internet',eind:plus(128),opzegAantal:1,opzegEenheid:'maanden',bedrag:52.5,verlengt:true,nummer:'',notitie:''},
+    {naam:'Streamingdienst',categorie:'TV',eind:plus(214),opzegAantal:14,opzegEenheid:'dagen',bedrag:13.99,verlengt:true,nummer:'',notitie:''},
+    {naam:'Autoverzekering',categorie:'Verzekering',eind:plus(335),opzegAantal:1,opzegEenheid:'maanden',bedrag:67.4,verlengt:true,nummer:'',notitie:''},
+    {naam:'Sportschool',categorie:'Abonnement',eind:plus(18),opzegAantal:1,opzegEenheid:'maanden',bedrag:29.95,verlengt:true,nummer:'',notitie:''}
+  ].map(function(c){c.voorbeeld=true;return c;});
+}
+async function voegVoorbeeldenToe(){
+  try{
+    var lijst=voorbeelden();
+    for(var i=0;i<lijst.length;i++)await bewaar(lijst[i],null);
+    toast('Voorbeelden toegevoegd. Verwijder ze zodra je eigen contracten erin staan.');
+  }catch(e){toast(foutTekst(e));}
+}
+async function wisVoorbeelden(){
+  try{
+    var ids=contracts.filter(function(c){return c&&c.voorbeeld;}).map(function(c){return c.id;});
+    for(var i=0;i<ids.length;i++)await verwijder(ids[i]);
+    toast('Voorbeelden verwijderd.');
+  }catch(e){toast(foutTekst(e));}
+}
+async function verlengEenJaar(id){
+  var c=contracts.filter(function(x){return x.id===id;})[0];
+  if(!c)return;
+  try{
+    var b=zonderId(c);
+    b.eind=iso(addMonths(parse(c.eind),12));
+    await bewaar(b,id);
+    toast('Einddatum verschoven naar '+fmtDate(parse(b.eind))+'.');
+  }catch(e){toast(foutTekst(e));}
+}
+function celCsv(v){
+  var s=String(v==null?'':v);
+  if(/^[=+\-@\t\r]/.test(s))s="'"+s;
+  return /[;"\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+async function exporteer(){
+  if(!dl)return;
+  var t=today();
+  var rijen=[['Contract','Soort','Einddatum','Opzegtermijn','Opzeggen vóór','Kosten per maand','Loopt vanzelf door','Contractnummer','Notities']];
+  contracts.filter(function(c){return c&&validDate(c.eind);}).sort(function(a,b){return a.eind<b.eind?-1:1;}).forEach(function(c){
+    var s=bereken(c,t);
+    rijen.push([c.naam,c.categorie,c.eind,termijnTekst(c),iso(s.actie),(+c.bedrag||0).toFixed(2).replace('.',','),c.verlengt?'ja':'nee',c.nummer,c.notitie]);
+  });
+  var tekst='﻿'+rijen.map(function(r){return r.map(celCsv).join(';');}).join('\r\n');
+  try{await dl.save({filename:'contracten-'+iso(t)+'.csv',data:tekst});toast('Bestand bewaard.');}
+  catch(e){if(!e||e.code!=='declined')toast('Exporteren lukte niet in deze weergave.');}
+}
+
+document.addEventListener('click',function(ev){
+  var btn=ev.target.closest&&ev.target.closest('[data-act]');
+  if(btn){
+    var act=btn.getAttribute('data-act'),id=btn.getAttribute('data-id');
+    if(act==='nieuw')openForm(null);
+    else if(act==='edit'){var c=contracts.filter(function(x){return x.id===id;})[0];if(c)openForm(c);}
+    else if(act==='verleng')verlengEenJaar(id);
+    else if(act==='voorbeeld')voegVoorbeeldenToe();
+    else if(act==='wis-voorbeeld')wisVoorbeelden();
+    else if(act==='csv')exporteer();
+    else if(act==='sluit')sluitForm();
+    else if(act==='filter'){
+      filter=btn.getAttribute('data-cat');render();
+      var nieuw=document.querySelector('[data-act="filter"][aria-pressed="true"]');if(nieuw)nieuw.focus();
+    }
+    else if(act==='verwijder'){
+      if(!delArmed){
+        delArmed=true;btn.textContent='Zeker weten? Verwijder nu';btn.classList.add('armed');
+        delTimer=setTimeout(resetDel,4000);
+      }else if(editing){
+        var wegId=editing.id;btn.disabled=true;
+        verwijder(wegId).then(function(){btn.disabled=false;sluitForm();toast('Contract verwijderd.');})
+          .catch(function(e){btn.disabled=false;resetDel();fout(foutTekst(e));});
+      }
+    }
+    return;
+  }
+  if(ev.target===$('backdrop'))sluitForm();
+});
+$('form').addEventListener('submit',opslaan);
+document.addEventListener('keydown',function(ev){
+  if($('backdrop').hidden)return;
+  if(ev.key==='Escape'){sluitForm();return;}
+  if(ev.key==='Tab'){
+    var els=Array.prototype.filter.call($('sheet').querySelectorAll('input,select,textarea,button'),function(e){return !e.disabled&&!e.hidden&&e.offsetParent!==null;});
+    if(!els.length)return;
+    var first=els[0],last=els[els.length-1];
+    if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}
+    else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}
+  }
+});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)render();});
+
+/* opstarten */
+async function wacht(){
+  for(var i=0;i<10&&!(window.claude&&window.claude.use);i++)await new Promise(function(r){setTimeout(r,100);});
+  return (window.claude&&window.claude.use)?window.claude:null;
+}
+async function init(){
+  render();
+  var cl=await wacht(),db=null,user=null;
+  if(cl){
+    var kans=function(n){return cl.use(n).catch(function(){return null;});};
+    var r=await Promise.all([kans('db'),kans('user'),kans('downloads')]);
+    db=r[0];user=r[1];dl=r[2];
+  }
+  var uid=null;
+  try{uid=user?await user.id():null;}catch(e){uid=null;}
+  if(db&&uid){
+    mode='db';
+    col=db.collection('data/users/'+uid);
+    col.onSnapshot(function(snap){
+      contracts=snap.docs.map(function(d){return Object.assign({},d.data(),{id:d.id});});
+      loaded=true;render();
+    },function(e){
+      toast('De opslag is niet bereikbaar. Je werkt nu alleen in deze browser.');
+      gaLokaal();render();
+    });
+  }else{
+    gaLokaal();render();
+  }
+}
+init();
+})();
+</script>
+
+</body>
+</html>
